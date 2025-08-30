@@ -4,13 +4,18 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"simple-todo-app/db"
 	"simple-todo-app/internal/handlers"
 )
 
 func main() {
-	port := ":9000"
+	port := "9000"
 
-	// setup route
+	// database
+	db.Init()
+	defer db.Close()
+
+	// route
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/tasks", handlers.GetTask)
@@ -18,8 +23,8 @@ func main() {
 	mux.HandleFunc("PUT /api/tasks/{id}", handlers.UpdateTask)
 	mux.HandleFunc("DELETE /api/tasks/{id}", handlers.DeleteTask)
 
-	fmt.Println("Server started on port", port)
-	err := http.ListenAndServe(port, mux)
+	fmt.Println("Server started on port :", port)
+	err := http.ListenAndServe(":"+port, mux)
 	if err != nil {
 		log.Fatal(err)
 	}

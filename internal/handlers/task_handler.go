@@ -3,18 +3,39 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"simple-todo-app/db"
 	"simple-todo-app/internal/helpers"
 	"simple-todo-app/internal/models"
 	"strconv"
 )
 
-var (
-	Task   = []models.Task{}
-	nextId = 1
-)
-
 func GetTask(w http.ResponseWriter, r *http.Request) {
-	helpers.ApiResponse(w, 200, "Task loaded", Task)
+	rows, err := db.Connection().Query("SELECT id, title, description, is_finished from tasks")
+
+	if err != nil {
+		helpers.ApiResponse(w, http.StatusInternalServerError, err.Error(), nil)
+		return
+	}
+
+	defer rows.Close()
+
+	var tasks = []models.Task{}
+	for rows.Next() {
+		var each models.Task
+		if err := rows.Scan(&each.Id, &each.Title, &each.Description, &each.IsFinished); err != nil {
+			helpers.ApiResponse(w, http.StatusInternalServerError, err.Error(), nil)
+			return
+		}
+
+		tasks = append(tasks, each)
+	}
+
+	if err = rows.Err(); err != nil {
+		helpers.ApiResponse(w, http.StatusInternalServerError, err.Error(), nil)
+		return
+	}
+
+	helpers.ApiResponse(w, 200, "Task loaded", tasks)
 }
 
 func CreateTask(w http.ResponseWriter, r *http.Request) {
@@ -32,14 +53,12 @@ func CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	Task = append(Task, models.Task{
-		Id:          nextId,
-		Title:       data.Title,
-		Description: data.Description,
-		IsFinished:  false,
-	})
+	_, err = db.Connection().Exec("INSERT INTO tasks (title, description) values ($1, $2)", data.Title, data.Description)
 
-	nextId++
+	if err != nil {
+		helpers.ApiResponse(w, http.StatusInternalServerError, "Error Insert Task : "+err.Error(), nil)
+		return
+	}
 
 	helpers.ApiResponse(w, 200, "New task created", data)
 }
@@ -66,18 +85,21 @@ func UpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for idx, task := range Task {
-		if task.Id == id {
-			Task[idx].Title = data.Title
-			Task[idx].Description = data.Description
-			Task[idx].IsFinished = data.IsFinished
+	res, err := db.Connection().Exec("UPDATE tasks SET title = $1, description = $2, is_finished = $3 WHERE id = $4", data.Title, data.Description, data.IsFinished, id)
 
-			helpers.ApiResponse(w, http.StatusOK, "Task updated", Task[idx])
-			return
-		}
+	if err != nil {
+		helpers.ApiResponse(w, http.StatusInternalServerError, "Error update task : "+err.Error(), nil)
+		return
 	}
 
-	helpers.ApiResponse(w, http.StatusNotFound, "Task not found", nil)
+	rows, _ := res.RowsAffected()
+
+	if rows == 0 {
+		helpers.ApiResponse(w, http.StatusNotFound, "Task not found", nil)
+		return
+	}
+
+	helpers.ApiResponse(w, http.StatusOK, "Task updated", nil)
 }
 
 func DeleteTask(w http.ResponseWriter, r *http.Request) {
@@ -88,13 +110,20 @@ func DeleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for idx, task := range Task {
-		if task.Id == id {
-			Task = append(Task[:idx], Task[idx+1:]...)
-			helpers.ApiResponse(w, http.StatusOK, "Task deleted", nil)
-			return
-		}
+	res, err := db.Connection().Exec("DELETE from tasks where id = $1", id)
+
+	if err != nil {
+		helpers.ApiResponse(w, http.StatusInternalServerError, "Error delete task : "+err.Error(), nil)
+		return
 	}
 
-	helpers.ApiResponse(w, http.StatusNotFound, "Task not found", nil)
+	// optional. just check if data with id is exists
+	rows, _ := res.RowsAffected()
+
+	if rows == 0 {
+		helpers.ApiResponse(w, http.StatusNotFound, "Task not found", nil)
+		return
+	}
+
+	helpers.ApiResponse(w, http.StatusOK, "Task deleted", nil)
 }
