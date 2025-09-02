@@ -13,11 +13,9 @@ var connection *sql.DB
 func Init() {
 	dbConfig := config.LoadConfig()
 
-	connectionString := "postgresql://" + dbConfig.DB_USERNAME + ":" + dbConfig.DB_PASSWORD + "@localhost:" + dbConfig.DB_PORT + "/" + dbConfig.DB_NAME + "?sslmode=disable"
-
 	var err error
 
-	connection, err = sql.Open("postgres", connectionString)
+	connection, err = sql.Open("postgres", dbConfig.DB_DNS)
 
 	if err != nil {
 		log.Fatal(err.Error())

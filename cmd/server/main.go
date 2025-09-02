@@ -13,6 +13,12 @@ func main() {
 
 	// database
 	db.Init()
+
+	migration := &db.Migrator{}
+	if err := migration.Up(); err != nil {
+		fmt.Println(err.Error())
+	}
+
 	defer db.Close()
 
 	// route
@@ -25,6 +31,7 @@ func main() {
 
 	fmt.Println("Server started on port :", port)
 	err := http.ListenAndServe(":"+port, mux)
+
 	if err != nil {
 		log.Fatal(err)
 	}
