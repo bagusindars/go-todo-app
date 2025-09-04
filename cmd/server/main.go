@@ -1,38 +1,93 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"simple-todo-app/db"
+	"simple-todo-app/internal/config"
 	"simple-todo-app/internal/handlers"
+	"simple-todo-app/internal/repositories"
+	"simple-todo-app/internal/router"
+	"simple-todo-app/internal/services"
+	"syscall"
+	"time"
 )
 
+type Application struct {
+	config  *config.Config
+	db      *db.DB
+	handler *handlers.Handlers
+}
+
 func main() {
-	port := "9000"
+	// load config
+	cfg := config.Load()
 
-	// database
-	db.Init()
+	app := NewApplication(cfg)
 
-	migration := &db.Migrator{}
+	defer app.Close()
+
+	router := router.SetupRoute(app.handler)
+
+	server := &http.Server{
+		Addr:    fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port),
+		Handler: router,
+	}
+
+	go func() {
+		fmt.Println("Starting server port :", cfg.Server.Port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("Server failed to start")
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+
+	// Graceful shutdown with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatal("Server forced to shutdown:", err)
+	}
+}
+
+func NewApplication(cfg *config.Config) *Application {
+	// database & migration
+	connection := db.InitDatabase(cfg.Database)
+	migrationCon := db.InitDatabase(cfg.Database)
+	migration := db.NewMigrator(migrationCon.DB)
 	if err := migration.Up(); err != nil {
 		fmt.Println(err.Error())
 	}
 
-	defer db.Close()
+	// repository
+	repos := repositories.NewRepositories(connection.DB)
 
-	// route
-	mux := http.NewServeMux()
+	// service
+	svc := services.NewService(repos)
 
-	mux.HandleFunc("GET /api/tasks", handlers.GetTask)
-	mux.HandleFunc("POST /api/tasks", handlers.CreateTask)
-	mux.HandleFunc("PUT /api/tasks/{id}", handlers.UpdateTask)
-	mux.HandleFunc("DELETE /api/tasks/{id}", handlers.DeleteTask)
+	// handler
+	hs := handlers.NewHandlers(svc)
 
-	fmt.Println("Server started on port :", port)
-	err := http.ListenAndServe(":"+port, mux)
+	return &Application{
+		config:  cfg,
+		db:      connection,
+		handler: hs,
+	}
+}
 
-	if err != nil {
-		log.Fatal(err)
+func (a *Application) Close() {
+	if a.db != nil {
+		a.db.Close()
 	}
 }

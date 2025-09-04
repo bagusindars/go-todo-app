@@ -4,25 +4,24 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"simple-todo-app/config"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
-type Migrator struct{}
+type Migrator struct {
+	conn *sql.DB
+}
+
+func NewMigrator(db *sql.DB) *Migrator {
+	return &Migrator{
+		conn: db,
+	}
+}
 
 func (m *Migrator) CreateMigration() (*migrate.Migrate, error) {
-	dbConfig := config.LoadConfig()
-
-	conn, err := sql.Open("postgres", dbConfig.DB_DNS)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect the database: %w", err)
-	}
-
-	driver, err := postgres.WithInstance(conn, &postgres.Config{})
+	driver, err := postgres.WithInstance(m.conn, &postgres.Config{})
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create postgres driver: %w", err)

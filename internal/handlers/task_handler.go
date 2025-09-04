@@ -3,42 +3,34 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"simple-todo-app/db"
 	"simple-todo-app/internal/helpers"
 	"simple-todo-app/internal/models"
+	"simple-todo-app/internal/services"
 	"strconv"
 )
 
-func GetTask(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Connection().Query("SELECT id, title, description, is_finished from tasks")
+type TaskHandler struct {
+	service services.TaskService
+}
+
+func NewTaskHandler(s services.TaskService) *TaskHandler {
+	return &TaskHandler{
+		service: s,
+	}
+}
+
+func (s *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
+	tasks, err := s.service.GetTask()
 
 	if err != nil {
 		helpers.ApiResponse(w, http.StatusInternalServerError, err.Error(), nil)
 		return
 	}
 
-	defer rows.Close()
-
-	var tasks = []models.Task{}
-	for rows.Next() {
-		var each models.Task
-		if err := rows.Scan(&each.Id, &each.Title, &each.Description, &each.IsFinished); err != nil {
-			helpers.ApiResponse(w, http.StatusInternalServerError, err.Error(), nil)
-			return
-		}
-
-		tasks = append(tasks, each)
-	}
-
-	if err = rows.Err(); err != nil {
-		helpers.ApiResponse(w, http.StatusInternalServerError, err.Error(), nil)
-		return
-	}
-
-	helpers.ApiResponse(w, 200, "Task loaded", tasks)
+	helpers.ApiResponse(w, http.StatusOK, "Task loaded", tasks)
 }
 
-func CreateTask(w http.ResponseWriter, r *http.Request) {
+func (s *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	var data models.CreateTaskRequest
 
 	err := json.NewDecoder(r.Body).Decode(&data)
@@ -48,22 +40,23 @@ func CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(data.Title) == 0 {
-		helpers.ApiResponse(w, http.StatusUnprocessableEntity, "Title is required", nil)
-		return
+	task := models.Task{
+		Title:       data.Title,
+		Description: data.Description,
+		IsFinished:  false,
 	}
 
-	_, err = db.Connection().Exec("INSERT INTO tasks (title, description) values ($1, $2)", data.Title, data.Description)
+	err = s.service.CreateTask(task)
 
 	if err != nil {
-		helpers.ApiResponse(w, http.StatusInternalServerError, "Error Insert Task : "+err.Error(), nil)
+		helpers.ApiResponse(w, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	helpers.ApiResponse(w, 200, "New task created", data)
+	helpers.ApiResponse(w, http.StatusOK, "Task created", task)
 }
 
-func UpdateTask(w http.ResponseWriter, r *http.Request) {
+func (s *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 
 	if err != nil {
@@ -80,29 +73,21 @@ func UpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(data.Title) == 0 {
-		helpers.ApiResponse(w, http.StatusUnprocessableEntity, "Title is required", nil)
+	task := models.Task{
+		Title:       data.Title,
+		Description: data.Description,
+		IsFinished:  data.IsFinished,
+	}
+
+	if err = s.service.UpdateTask(id, task); err != nil {
+		helpers.ApiResponse(w, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	res, err := db.Connection().Exec("UPDATE tasks SET title = $1, description = $2, is_finished = $3 WHERE id = $4", data.Title, data.Description, data.IsFinished, id)
-
-	if err != nil {
-		helpers.ApiResponse(w, http.StatusInternalServerError, "Error update task : "+err.Error(), nil)
-		return
-	}
-
-	rows, _ := res.RowsAffected()
-
-	if rows == 0 {
-		helpers.ApiResponse(w, http.StatusNotFound, "Task not found", nil)
-		return
-	}
-
-	helpers.ApiResponse(w, http.StatusOK, "Task updated", nil)
+	helpers.ApiResponse(w, http.StatusOK, "Task updated", task)
 }
 
-func DeleteTask(w http.ResponseWriter, r *http.Request) {
+func (s *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 
 	if err != nil {
@@ -110,18 +95,8 @@ func DeleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := db.Connection().Exec("DELETE from tasks where id = $1", id)
-
-	if err != nil {
-		helpers.ApiResponse(w, http.StatusInternalServerError, "Error delete task : "+err.Error(), nil)
-		return
-	}
-
-	// optional. just check if data with id is exists
-	rows, _ := res.RowsAffected()
-
-	if rows == 0 {
-		helpers.ApiResponse(w, http.StatusNotFound, "Task not found", nil)
+	if err = s.service.DeleteTask(id); err != nil {
+		helpers.ApiResponse(w, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
