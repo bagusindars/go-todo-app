@@ -2,14 +2,15 @@ package services
 
 import (
 	"errors"
+	"simple-todo-app/internal/helpers"
 	"simple-todo-app/internal/models"
 	"simple-todo-app/internal/repositories"
 )
 
 type TaskService interface {
 	GetByUser(userId uint) ([]models.Task, error)
-	CreateTask(data models.Task) error
-	UpdateTask(id int, data models.Task) error
+	CreateTask(userInfo *helpers.Claims, data models.Task) error
+	UpdateTask(id int, userInfo *helpers.Claims, data models.Task) error
 	DeleteTask(id int) error
 }
 
@@ -27,20 +28,42 @@ func (s *taskService) GetByUser(userId uint) ([]models.Task, error) {
 	return s.repo.GetAllByUser(userId)
 }
 
-func (s *taskService) CreateTask(data models.Task) error {
+func (s *taskService) CreateTask(userInfo *helpers.Claims, data models.Task) error {
 	if len(data.Title) == 0 {
 		return errors.New("title cannot be empty")
 	}
 
-	return s.repo.Create(data)
+	err := s.repo.Create(data)
+
+	if err != nil {
+		return err
+	}
+
+	go helpers.SendEmail(userInfo.Email, "New task added", "You created new task : "+data.Title+". Focus on it!")
+
+	return nil
 }
 
-func (s *taskService) UpdateTask(id int, data models.Task) error {
+func (s *taskService) UpdateTask(id int, userInfo *helpers.Claims, data models.Task) error {
 	if len(data.Title) == 0 {
 		return errors.New("title cannot be empty")
 	}
 
-	return s.repo.Update(id, data)
+	err := s.repo.Update(id, data)
+
+	if err != nil {
+		return err
+	}
+
+	if data.IsFinished {
+		go helpers.SendEmail(
+			userInfo.Email,
+			data.Title+" is finished!",
+			"Nice work! You’ve just finished the task: "+data.Title+". Keep up the great momentum 🚀",
+		)
+	}
+
+	return nil
 }
 
 func (s *taskService) DeleteTask(id int) error {

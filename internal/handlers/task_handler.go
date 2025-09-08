@@ -50,7 +50,7 @@ func (s *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		UserId:      int(userInfo.UserId),
 	}
 
-	err = s.service.CreateTask(task)
+	err = s.service.CreateTask(userInfo, task)
 
 	if err != nil {
 		helpers.ApiResponse(w, http.StatusBadRequest, err.Error(), nil)
@@ -87,7 +87,7 @@ func (s *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 		UserId:      int(userInfo.UserId),
 	}
 
-	if err = s.service.UpdateTask(id, task); err != nil {
+	if err = s.service.UpdateTask(id, userInfo, task); err != nil {
 		helpers.ApiResponse(w, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
