@@ -20,7 +20,8 @@ func NewTaskHandler(s services.TaskService) *TaskHandler {
 }
 
 func (s *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
-	tasks, err := s.service.GetTask()
+	userInfo := r.Context().Value("userInfo").(*helpers.Claims)
+	tasks, err := s.service.GetByUser(userInfo.UserId)
 
 	if err != nil {
 		helpers.ApiResponse(w, http.StatusInternalServerError, err.Error(), nil)
@@ -40,10 +41,13 @@ func (s *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userInfo := r.Context().Value("userInfo").(*helpers.Claims)
+
 	task := models.Task{
 		Title:       data.Title,
 		Description: data.Description,
 		IsFinished:  false,
+		UserId:      int(userInfo.UserId),
 	}
 
 	err = s.service.CreateTask(task)
@@ -73,10 +77,14 @@ func (s *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userInfo := r.Context().Value("userInfo").(*helpers.Claims)
+
 	task := models.Task{
+		Id:          id,
 		Title:       data.Title,
 		Description: data.Description,
 		IsFinished:  data.IsFinished,
+		UserId:      int(userInfo.UserId),
 	}
 
 	if err = s.service.UpdateTask(id, task); err != nil {

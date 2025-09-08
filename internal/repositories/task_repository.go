@@ -7,7 +7,7 @@ import (
 )
 
 type TaskRepository interface {
-	GetAll() ([]models.Task, error)
+	GetAllByUser(userId uint) ([]models.Task, error)
 	Create(task models.Task) error
 	Update(id int, task models.Task) error
 	Delete(id int) error
@@ -23,8 +23,8 @@ func NewTaskRepository(db *sql.DB) TaskRepository {
 	}
 }
 
-func (r *taskRepository) GetAll() ([]models.Task, error) {
-	rows, err := r.db.Query("SELECT id, title, description, is_finished from tasks")
+func (r *taskRepository) GetAllByUser(userId uint) ([]models.Task, error) {
+	rows, err := r.db.Query("SELECT id, title, description, is_finished, user_id FROM tasks WHERE user_id = $1", userId)
 
 	if err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func (r *taskRepository) GetAll() ([]models.Task, error) {
 	var tasks = []models.Task{}
 	for rows.Next() {
 		var each models.Task
-		if err := rows.Scan(&each.Id, &each.Title, &each.Description, &each.IsFinished); err != nil {
+		if err := rows.Scan(&each.Id, &each.Title, &each.Description, &each.IsFinished, &each.UserId); err != nil {
 			return nil, err
 		}
 
@@ -46,7 +46,7 @@ func (r *taskRepository) GetAll() ([]models.Task, error) {
 }
 
 func (r *taskRepository) Create(task models.Task) error {
-	_, err := r.db.Exec("INSERT INTO tasks (title, description) values ($1, $2)", task.Title, task.Description)
+	_, err := r.db.Exec("INSERT INTO tasks (title, description, user_id) values ($1, $2, $3)", task.Title, task.Description, task.UserId)
 
 	if err != nil {
 		return errors.New("Error create task : " + err.Error())
