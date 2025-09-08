@@ -52,3 +52,21 @@ func (s *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	helpers.ApiResponse(w, http.StatusOK, "Login success", res)
 }
+
+func (s *UserHandler) Info(w http.ResponseWriter, r *http.Request) {
+	jwtInfo := r.Context().Value("userInfo").(*helpers.Claims)
+
+	if jwtInfo == nil {
+		helpers.ApiResponse(w, http.StatusBadRequest, "Profile invalid", nil)
+		return
+	}
+
+	user, err := s.service.FindUserByEmail(jwtInfo.Email)
+
+	if err != nil {
+		helpers.ApiResponse(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	helpers.ApiResponse(w, http.StatusOK, "Profile loaded", user)
+}

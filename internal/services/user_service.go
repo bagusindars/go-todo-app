@@ -11,6 +11,7 @@ import (
 type UserService interface {
 	Register(data models.UserRegisterRequest) (map[string]any, error)
 	Login(data models.UserLoginRequest) (map[string]any, error)
+	FindUserByEmail(email string) (models.Users, error)
 }
 
 type userService struct {
@@ -31,6 +32,10 @@ func (s *userService) FindUserByEmail(email string) (models.Users, error) {
 	}
 
 	return user, nil
+}
+
+func (s *userService) Info() {
+
 }
 
 func (s *userService) Login(data models.UserLoginRequest) (map[string]any, error) {
